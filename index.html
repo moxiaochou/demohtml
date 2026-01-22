@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>AI 智媒超级中台 · 终极演示版</title>
+    <style>
+        /* --- 全局设定 --- */
+        :root {
+            --bg-color: #02060f;
+            --hex-bg: rgba(11, 20, 38, 0.9); /* 稍微调深一点，防穿透 */
+            --primary: #00f3ff;
+            --secondary: #0066ff;
+            --alert: #ff3333;
+            --success: #00ff9d;
+            --warning: #ffcc00;
+            --text-main: #ffffff;
+            --text-dim: #6d8ba6;
+            --border: 1px solid rgba(0, 243, 255, 0.3);
+            --glass: rgba(0, 243, 255, 0.05);
+        }
+
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Rajdhani', 'Microsoft YaHei', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            user-select: none;
+        }
+
+        /* 背景网格 */
+        .bg-grid {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(var(--glass) 1px, transparent 1px),
+                linear-gradient(90deg, var(--glass) 1px, transparent 1px);
+            background-size: 50px 50px;
+            z-index: -2;
+            perspective: 1000px;
+            /* 恢复 V3 的背景动效 */
+            animation: gridMove 20s linear infinite;
+        }
+        @keyframes gridMove { 0% { background-position: 0 0; } 100% { background-position: 0 1000px; } }
+        
+        /* 扫描线 */
+        .scanline {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.5) 51%);
+            background-size: 100% 4px; z-index: 100; pointer-events: none; opacity: 0.3;
+        }
+
+        /* 顶部 Header */
+        header {
+            position: absolute; top: 0; left: 0; width: 100%; padding: 15px 30px;
+            display: flex; justify-content: space-between; align-items: center; z-index: 20;
+            background: linear-gradient(to bottom, rgba(0,0,0,1), transparent);
+            box-sizing: border-box; border-bottom: 1px solid rgba(0,243,255,0.1);
+        }
+        .logo { font-size: 24px; letter-spacing: 2px; font-weight: bold; text-shadow: 0 0 10px var(--primary); }
+        .system-status { font-size: 14px; color: var(--text-dim); display: flex; gap: 20px; font-family: 'Consolas', monospace; }
+        .status-dot { width: 8px; height: 8px; background: var(--primary); border-radius: 50%; display: inline-block; box-shadow: 0 0 8px var(--primary); animation: blink 2s infinite;}
+
+        /* 返回按钮 (V3样式) */
+        .back-btn {
+            position: absolute; top: 90px; left: 30px; padding: 10px 30px;
+            border: 1px solid var(--primary); background: rgba(0, 10, 20, 0.8);
+            color: var(--primary); cursor: pointer; letter-spacing: 2px; transition: 0.3s;
+            display: none; z-index: 50; font-weight: bold;
+        }
+        .back-btn:hover { background: var(--primary); color: #000; box-shadow: 0 0 20px var(--primary); }
+
+        /* --- 核心舞台 --- */
+        #main-stage {
+            position: relative; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            perspective: 2000px; transform-style: preserve-3d;
+        }
+
+        .layer {
+            position: absolute; width: 100%; height: 100%;
+            transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            opacity: 0; pointer-events: none;
+            transform: translateZ(-500px);
+            display: flex; justify-content: center; align-items: center;
+            /* 修正：让Layer内容居中显示，不被挤压 */
+            flex-direction: column;
+        }
+        .layer.active { opacity: 1; pointer-events: auto; transform: translateZ(0); }
+        .layer.behind { transform: translateZ(-1200px) scale(2); opacity: 0; }
+        .layer.ahead { transform: translateZ(500px) scale(0.1); opacity: 0; }
+
+        /* ================= LAYER 1 专属样式 (V4 新增部分) ================= */
+        
+        /* 全息地球 */
+        .earth-container {
+            position: absolute; width: 650px; height: 650px;
+            z-index: -1; opacity: 0.2;
+            transform-style: preserve-3d;
+            animation: spinEarth 60s infinite linear;
+        }
+        .earth-ring {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            border: 1px solid rgba(0, 243, 255, 0.5); border-radius: 50%;
+        }
+        @keyframes spinEarth { 0% { transform: rotateY(0deg) rotateX(20deg); } 100% { transform: rotateY(360deg) rotateX(20deg); } }
+
+        /* 核心圆环 (V1/V4 混合) */
+        .core-circle {
+            width: 400px; height: 400px; border: 2px solid var(--primary); border-radius: 50%;
+            position: relative; display: flex; justify-content: center; align-items: center;
+            cursor: pointer; box-shadow: 0 0 50px rgba(0, 243, 255, 0.1); background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(2px); z-index: 10; transition: 0.3s;
+        }
+        .core-circle:hover { transform: scale(1.05); box-shadow: 0 0 80px rgba(0, 243, 255, 0.4); border-color: #fff; }
+        .core-inner-ring { position: absolute; width: 360px; height: 360px; border: 1px dashed var(--text-dim); border-radius: 50%; animation: rotate 20s linear infinite; }
+        .core-outer-ring { position: absolute; width: 440px; height: 440px; border: 4px solid transparent; border-top: 4px solid var(--primary); border-bottom: 4px solid var(--primary); border-radius: 50%; animation: rotate 6s linear infinite reverse; }
+        
+        /* 左右侧面板 (V4 新增) */
+        .panel {
+            position: absolute; width: 320px; height: 60%; top: 15%;
+            background: var(--hex-bg); border: var(--border);
+            padding: 20px; box-sizing: border-box; backdrop-filter: blur(5px);
+            display: flex; flex-direction: column;
+        }
+        .panel-left { left: 50px; border-left: 4px solid var(--secondary); transform: perspective(1000px) rotateY(10deg); }
+        .panel-right { right: 50px; border-right: 4px solid var(--success); transform: perspective(1000px) rotateY(-10deg); text-align: right; }
+        .panel h3 { margin: 0 0 20px 0; color: var(--text-main); border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 10px; font-size: 18px; letter-spacing: 1px; }
+        
+        /* 左侧列表样式 */
+        .source-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-size: 13px; }
+        .source-name { color: var(--text-dim); width: 80px; }
+        .source-val { color: var(--primary); font-family: 'Consolas'; font-weight: bold; width: 60px; text-align: right; }
+        .source-bar-box { flex: 1; height: 6px; background: rgba(255,255,255,0.1); margin: 0 10px; border-radius: 2px; overflow: hidden; }
+        .source-bar { height: 100%; background: var(--secondary); width: 0%; animation: loadBar 2s ease-out forwards; }
+
+        /* 右侧数据样式 */
+        .impact-box { margin-bottom: 25px; }
+        .impact-num { font-size: 32px; color: var(--success); font-weight: bold; font-family: 'Consolas'; }
+        .impact-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; }
+        .sentiment-bar { width: 100%; height: 10px; background: #333; display: flex; margin-top: 5px; }
+        .sent-pos { width: 60%; background: var(--success); }
+        .sent-neu { width: 30%; background: var(--text-dim); }
+        .sent-neg { width: 10%; background: var(--alert); }
+        .legend { display: flex; justify-content: flex-end; gap: 10px; font-size: 10px; color: #888; margin-top: 5px; }
+
+        /* 热点词云 */
+        .word-cloud-container { position: absolute; width: 800px; height: 600px; pointer-events: none; z-index: 5; }
+        .hot-word { position: absolute; color: var(--primary); opacity: 0; font-size: 14px; text-shadow: 0 0 5px var(--primary); animation: floatWord 4s infinite ease-in-out; }
+
+        /* 底部情报流 Ticker */
+        .ticker-wrap {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 40px;
+            background: rgba(0,0,0,0.9); border-top: 1px solid var(--border);
+            overflow: hidden; white-space: nowrap; display: flex; align-items: center; z-index: 50;
+        }
+        .ticker-title { 
+            background: var(--primary); color: #000; font-weight: bold; padding: 0 20px; height: 100%; 
+            display: flex; align-items: center; z-index: 2; box-shadow: 5px 0 10px #000;
+        }
+        .ticker-content { display: inline-block; padding-left: 100%; animation: ticker 90s linear infinite; color: var(--text-dim); font-size: 14px; }
+        .ticker-item { display: inline-block; margin-right: 50px; }
+        .ticker-item b { color: var(--text-main); margin-right: 5px; }
+
+        /* ================= LAYER 2/3/4 样式 (恢复 V3 原版) ================= */
+        
+        /* Layer 2: 业务管线 - 恢复复杂的流光卡片 */
+        .pipeline-wrapper { display: flex; gap: 50px; align-items: center; width: 90%; justify-content: center; }
+        .pipe-card {
+            background: var(--hex-bg); border: var(--border); padding: 30px;
+            width: 300px; height: 400px; position: relative; transition: 0.3s;
+            cursor: pointer; display: flex; flex-direction: column;
+            box-shadow: 0 0 10px rgba(0, 243, 255, 0.05);
+        }
+        .pipe-card:hover { transform: translateY(-10px); box-shadow: 0 0 30px rgba(0,243,255,0.2); border-color: var(--primary); z-index: 10; }
+        .pipe-header { font-size: 18px; font-weight: bold; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; color: var(--primary); }
+        .pipe-chart { flex: 1; background: rgba(0,0,0,0.3); position: relative; overflow: hidden; }
+        
+        .click-hint {
+            position:absolute; top:-10px; left:50%; transform:translateX(-50%); 
+            background:var(--primary); color:#000; padding:2px 10px; font-size:10px; font-weight:bold;
+            opacity: 0; transition: 0.3s; pointer-events: none;
+        }
+        .pipe-card:hover .click-hint { opacity: 1; top: -15px;}
+
+        /* V3 的粒子动画 */
+        .flow-line { height: 2px; background: #333; width: 100%; margin: 15px 0; position: relative; }
+        .flow-particle { width: 20px; height: 4px; background: var(--primary); position: absolute; box-shadow: 0 0 10px var(--primary); animation: flowMove 2s infinite linear; }
+
+        /* Layer 3: 蜂巢 */
+        .swarm-stats { width: 80%; display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid var(--text-dim); padding-bottom: 10px;}
+        .swarm-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 15px; width: 80%; perspective: 500px; }
+        .agent-node {
+            height: 80px; background: rgba(0, 243, 255, 0.02); border: 1px solid rgba(255,255,255,0.1);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-size: 13px; color: var(--text-dim); cursor: pointer; transition: 0.2s; position: relative; overflow: hidden;
+        }
+        .agent-node:hover { background: rgba(0, 243, 255, 0.2); border-color: var(--primary); transform: scale(1.1); z-index: 2; box-shadow: 0 0 15px var(--primary); color: #fff; }
+        .agent-node.active-job { border-color: var(--primary); color: #fff;}
+        .agent-node.active-job::after { content:''; position: absolute; bottom: 0; left: 0; width: 100%; height: 2px; background: var(--primary); animation: scan 1s infinite alternate; }
+
+        /* Layer 4: 终端 */
+        .task-terminal {
+            width: 80%; height: 70%; background: rgba(0,0,0,0.9); border: 1px solid var(--primary);
+            box-shadow: 0 0 50px rgba(0,0,0,0.5); padding: 30px; font-family: 'Consolas', monospace; position: relative;
+        }
+        .terminal-header { display: flex; justify-content: space-between; border-bottom: 1px dashed var(--text-dim); padding-bottom: 10px; margin-bottom: 20px;}
+        .logs { height: 80%; overflow-y: auto; color: var(--text-dim); line-height: 1.8; font-size: 14px;}
+        .log-new { color: var(--primary); text-shadow: 0 0 5px var(--primary); }
+        .emergency-btn {
+            position: absolute; bottom: 30px; right: 30px;
+            background: transparent; border: 2px solid var(--alert); color: var(--alert);
+            padding: 15px 40px; font-size: 18px; font-weight: bold; cursor: pointer;
+            animation: pulseRed 2s infinite;
+        }
+        .emergency-btn:hover { background: var(--alert); color: #fff; }
+
+        /* 通用动画 */
+        @keyframes rotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes flowMove { 0% { left: -20%; opacity: 0;} 20% { opacity: 1; } 80% { opacity: 1;} 100% { left: 100%; opacity: 0;} }
+        @keyframes scan { 0% { width: 0%; left: 50%; } 100% { width: 100%; left: 0; } }
+        @keyframes pulseRed { 0% { box-shadow: 0 0 0 var(--alert); } 50% { box-shadow: 0 0 20px var(--alert); } 100% { box-shadow: 0 0 0 var(--alert); } }
+        @keyframes loadBar { from { width: 0; } to { width: var(--w); } }
+        @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-100%, 0, 0); } }
+        @keyframes floatWord { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 0.8; } 80% { opacity: 0.8; } 100% { transform: translateY(-20px); opacity: 0; } }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+    </style>
+</head>
+<body>
+
+    <div class="bg-grid"></div>
+    <div class="scanline"></div>
+
+    <header>
+        <div class="logo">AI 智媒超级中台 · 指挥驾驶舱 <span style="font-size:12px; opacity:0.5; color:var(--primary)">V5.0 FINAL</span></div>
+        <div class="system-status">
+            <div><span class="status-dot"></span> 系统在线</div>
+            <div>算力负载: 42%</div>
+            <div>网络吞吐: 12GB/s</div>
+            <div id="clock">00:00:00</div>
+        </div>
+    </header>
+
+    <button class="back-btn" onclick="goBack()">◀ 返回上一级</button>
+
+    <!-- 底部滚动情报流 (V4保留) -->
+    <div class="ticker-wrap" id="ticker-wrap">
+        <div class="ticker-title">实时情报抓取</div>
+        <div class="ticker-content" id="ticker-content"></div>
+    </div>
+
+    <div id="main-stage">
+        
+        <!-- ================= LAYER 1: 宏观态势 (V4 升级版) ================= -->
+        <div class="layer active" id="layer1">
+            
+            <!-- V4 全息地球 -->
+            <div class="earth-container">
+                <div class="earth-ring" style="transform: rotateY(0deg);"></div>
+                <div class="earth-ring" style="transform: rotateY(30deg);"></div>
+                <div class="earth-ring" style="transform: rotateY(60deg);"></div>
+                <div class="earth-ring" style="transform: rotateY(90deg);"></div>
+                <div class="earth-ring" style="transform: rotateY(120deg);"></div>
+                <div class="earth-ring" style="transform: rotateY(150deg);"></div>
+                <div class="earth-ring" style="transform: rotateX(90deg);"></div>
+            </div>
+
+            <!-- V4 热点词云 -->
+            <div class="word-cloud-container" id="word-cloud"></div>
+
+            <!-- V4 左侧面板 -->
+            <div class="panel panel-left">
+                <h3>信源全景图 (INGESTION)</h3>
+                <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+                    <div class="source-row"><span class="source-name">微信公众号</span><div class="source-bar-box"><div class="source-bar" style="--w: 85%"></div></div><span class="source-val">8,204</span></div>
+                    <div class="source-row"><span class="source-name">微博/社交</span><div class="source-bar-box"><div class="source-bar" style="--w: 92%; background:var(--primary)"></div></div><span class="source-val">12k+</span></div>
+                    <div class="source-row"><span class="source-name">新闻客户端</span><div class="source-bar-box"><div class="source-bar" style="--w: 60%"></div></div><span class="source-val">3,100</span></div>
+                    <div class="source-row"><span class="source-name">海外媒资</span><div class="source-bar-box"><div class="source-bar" style="--w: 40%; background:var(--warning)"></div></div><span class="source-val">520</span></div>
+                    <div class="source-row"><span class="source-name">短视频源</span><div class="source-bar-box"><div class="source-bar" style="--w: 75%; background:#ff00ff"></div></div><span class="source-val">5,800</span></div>
+                    <div style="margin-top:20px; border-top:1px dashed #333; padding-top:15px;">
+                        <div style="font-size:12px; color:#888;">实时抓取流量</div>
+                        <div style="font-size:24px; color:var(--text-main); font-family:'Consolas'">124.5 <span style="font-size:14px">MB/s</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 核心枢纽 -->
+            <div class="core-circle" onclick="goToLayer(2)">
+                <div class="core-outer-ring"></div>
+                <div class="core-inner-ring"></div>
+                <div class="core-label" style="text-align:center">
+                    <p>总吞吐事件量</p>
+                    <h1 id="tps-counter" style="font-size:70px; margin:0; font-family:'Consolas'; text-shadow:0 0 20px var(--primary)">892</h1>
+                    <p style="color:var(--primary); animation:pulse 1s infinite">SYSTEM ACTIVE</p>
+                </div>
+            </div>
+            <div style="position:absolute; bottom:100px; color:var(--text-dim); animation:pulse 2s infinite">点击核心圆环 · 进入全链路监控</div>
+
+            <!-- V4 右侧面板 -->
+            <div class="panel panel-right">
+                <h3>影响力雷达 (IMPACT)</h3>
+                <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+                    <div class="impact-box"><div class="impact-label">全网触达人次 / REACH</div><div class="impact-num">10,245,800</div></div>
+                    <div class="impact-box"><div class="impact-label">平均互动率 / ENGAGEMENT</div><div class="impact-num" style="color:var(--primary)">4.82%</div></div>
+                    <div class="impact-box">
+                        <div class="impact-label" style="text-align:left">舆情情感分布 / SENTIMENT</div>
+                        <div class="sentiment-bar"><div class="sent-pos"></div><div class="sent-neu"></div><div class="sent-neg"></div></div>
+                        <div class="legend"><span><span style="color:var(--success)">●</span> 正面 60%</span><span><span style="color:var(--text-dim)">●</span> 中立 30%</span><span><span style="color:var(--alert)">●</span> 负面 10%</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= LAYER 2: 业务管线 (完全恢复 V3 的动态卡片) ================= -->
+        <div class="layer" id="layer2">
+            <h2 style="position: absolute; top: 10%; letter-spacing: 5px; color: var(--primary);">业务全链路监控视图</h2>
+            <div class="pipeline-wrapper">
+                
+                <!-- 卡片1: 感知 -->
+                <div class="pipe-card" onclick="openSwarm('sensing')">
+                    <div class="click-hint">点击查看感知集群</div>
+                    <div class="pipe-header">01. 全网感知 & 清洗</div>
+                    <div style="font-size:12px; color:var(--text-dim)">目标：热点召回率 90%+</div>
+                    <div class="pipe-chart">
+                        <!-- V3 的动态效果 -->
+                        <div class="flow-line"><div class="flow-particle" style="animation-duration:1s"></div></div>
+                        <div class="flow-line"><div class="flow-particle" style="animation-duration:1.5s; animation-delay:0.5s"></div></div>
+                        <div style="margin-top:20px; font-size:30px; text-align:center;">98.5%</div>
+                        <div style="text-align:center; font-size:10px;">当前覆盖率</div>
+                    </div>
+                </div>
+
+                <!-- 卡片2: 生产 -->
+                <div class="pipe-card" onclick="openSwarm('production')" style="transform: scale(1.05); z-index:5;">
+                    <div class="click-hint" style="opacity:1; top:-15px;">点击查看生产集群</div>
+                    <div class="pipe-header">02. 智能决策 & 生产</div>
+                    <div style="font-size:12px; color:var(--text-dim)">状态：高并发处理中</div>
+                    <div class="pipe-chart">
+                        <div class="flow-line"><div class="flow-particle" style="width:40px;"></div></div>
+                        <div class="flow-line" style="top:10px"><div class="flow-particle" style="background:var(--secondary); animation-direction: reverse;"></div></div>
+                        <div class="flow-line" style="top:20px"><div class="flow-particle" style="background:#fff; width:10px; animation-duration:0.5s"></div></div>
+                        <div style="display:flex; justify-content:space-between; margin-top:40px;">
+                            <div style="text-align:center;"><div style="font-size:20px; color:var(--primary)">350</div><div style="font-size:10px;">稿件生成</div></div>
+                            <div style="text-align:center;"><div style="font-size:20px; color:var(--secondary)">120</div><div style="font-size:10px;">视频渲染</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 卡片3: 优化 -->
+                <div class="pipe-card" onclick="openSwarm('optimization')">
+                    <div class="click-hint">点击查看策略集群</div>
+                    <div class="pipe-header">03. 策略闭环优化</div>
+                    <div style="font-size:12px; color:var(--text-dim)">闭环状态：已建立连接</div>
+                    <div class="pipe-chart">
+                        <div style="width:100px; height:100px; border:4px solid var(--text-dim); border-radius:50%; margin:20px auto; border-top-color:var(--primary); animation:rotate 2s infinite linear;"></div>
+                        <div style="text-align:center;">数据回流反馈</div>
+                    </div>
+                </div>
+
+            </div>
+            <div style="position:absolute; bottom: 20px; color:var(--text-dim); font-size:12px;">已全部就绪：点击任意模块深入查看对应的 Agent 协同状态</div>
+        </div>
+
+        <!-- ================= LAYER 3: 蜂巢集群 (完全恢复 V3) ================= -->
+        <div class="layer" id="layer3">
+            <h2 id="swarm-title" style="position: absolute; top: 10%; letter-spacing: 5px; color: var(--primary);">AI 智能体蜂巢集群</h2>
+            <div class="swarm-stats">
+                <div>活跃智能体: <span style="color:var(--primary); font-size:20px;">64</span></div>
+                <div>任务队列: <span style="color:var(--secondary); font-size:20px;">128</span></div>
+                <div>异常告警: <span style="color:var(--alert); font-size:20px;">0.02%</span></div>
+            </div>
+            <div class="swarm-grid" id="swarm-container">
+                <!-- JS动态生成 -->
+            </div>
+            <div style="margin-top:20px; color:var(--text-dim);">点击任意高亮智能体可查看实时执行日志</div>
+        </div>
+
+        <!-- ================= LAYER 4: 任务详情 (完全恢复 V3) ================= -->
+        <div class="layer" id="layer4">
+            <div class="task-terminal">
+                <div class="terminal-header">
+                    <div>智能体编号: <span style="color:var(--primary)" id="log-agent-id">WRITER-ALPHA-07</span></div>
+                    <div>任务 ID: <span style="color:var(--secondary)">#TSK-99283-FSD</span></div>
+                    <div>当前状态: <span style="background:var(--primary); color:#000; padding:0 5px;">执行中</span></div>
+                </div>
+                <div class="logs" id="log-window"></div>
+                <button class="emergency-btn" onclick="alert('人工介入指令已发送！生产链路已熔断暂停！')">⚠️ 紧急人工接管 / 熔断</button>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    let currentLayer = 1;
+    const maxLayers = 4;
+
+    // --- V3 的详细模块配置 (恢复) ---
+    const moduleConfig = {
+        'sensing': {
+            title: '感知与清洗智能体集群',
+            roles: ['全网爬虫', '数据清洗', '去重算法', '热点监控', '信源评级', 'NLP分类']
+        },
+        'production': {
+            title: '决策与生产智能体集群',
+            roles: ['快讯写手', '深度编辑', '视觉设计', '视频渲染', '合规审核', '标题生成']
+        },
+        'optimization': {
+            title: '策略优化智能体集群',
+            roles: ['流量归因', 'A/B测试', '用户画像', '点击预估', '数据分析', '标签修正']
+        }
+    };
+
+    // --- V4 的 Ticker 内容填充 ---
+    const tickerNews = [
+        "OpenAI 发布最新 GPT-5 预览版，多模态能力大幅提升...",
+        "特斯拉 FSD 入华倒计时，数据中心已在上海落地...",
+        "英伟达股价再创新高，算力需求持续井喷...",
+        "国内首个 AIGC 媒体联盟成立，制定行业新标准...",
+        "SpaceX 星舰第四次试飞成功，回收画面震撼...",
+        "苹果 Vision Pro 国行版下周开售，应用生态成关键..."
+    ];
+    const tickerContent = document.getElementById('ticker-content');
+    let tickerHtml = "";
+    for(let i=0; i<5; i++) { tickerNews.forEach(news => { tickerHtml += `<span class="ticker-item"><b>[抓取中]</b> ${news}</span>`; }); }
+    tickerContent.innerHTML = tickerHtml;
+
+    // --- V4 的热词逻辑 ---
+    const hotWords = ["大模型", "RAG检索", "Transformer", "多模态", "算力集群", "知识图谱", "Agent", "神经网络", "深度学习", "向量数据库"];
+    const wordContainer = document.getElementById('word-cloud');
+    setInterval(() => {
+        if(currentLayer !== 1) return;
+        const word = document.createElement('div');
+        word.className = 'hot-word';
+        word.innerText = hotWords[Math.floor(Math.random() * hotWords.length)];
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 250 + Math.random() * 200;
+        const left = 50 + (Math.random() * 60 - 30);
+        const top = 50 + (Math.random() * 60 - 30);
+        word.style.left = left + '%'; word.style.top = top + '%';
+        word.style.animationDuration = (3 + Math.random() * 3) + 's';
+        wordContainer.appendChild(word);
+        setTimeout(() => word.remove(), 6000);
+    }, 800);
+
+    // --- 导航逻辑 ---
+    function goToLayer(targetLayer) {
+        if(targetLayer > maxLayers) return;
+        document.getElementById(`layer${currentLayer}`).classList.remove('active');
+        document.getElementById(`layer${currentLayer}`).classList.add('behind');
+        const next = document.getElementById(`layer${targetLayer}`);
+        next.classList.remove('ahead'); 
+        void next.offsetWidth;
+        next.classList.add('active');
+        currentLayer = targetLayer;
+        updateUI();
+    }
+
+    function goBack() {
+        if(currentLayer <= 1) return;
+        document.getElementById(`layer${currentLayer}`).classList.remove('active');
+        document.getElementById(`layer${currentLayer}`).classList.remove('behind'); 
+        const prev = document.getElementById(`layer${currentLayer - 1}`);
+        prev.classList.remove('behind');
+        prev.classList.add('active');
+        currentLayer--;
+        updateUI();
+    }
+
+    // --- V3 的蜂巢生成逻辑 (恢复) ---
+    function openSwarm(type) {
+        const config = moduleConfig[type];
+        if(!config) return;
+        document.getElementById('swarm-title').innerText = config.title;
+        const container = document.getElementById('swarm-container');
+        container.innerHTML = ''; 
+        for(let i=0; i<50; i++) {
+            const div = document.createElement('div');
+            div.className = 'agent-node';
+            const role = config.roles[Math.floor(Math.random() * config.roles.length)];
+            div.innerHTML = `<span style="font-weight:bold; color:var(--primary)">${role}</span><span>#${i+100}</span>`;
+            div.onclick = () => {
+                document.getElementById('log-agent-id').innerText = `${role}-00${i}`;
+                goToLayer(4);
+            };
+            if(Math.random() > 0.7) div.classList.add('active-job');
+            container.appendChild(div);
+        }
+        goToLayer(3);
+    }
+
+    function updateUI() {
+        const btn = document.querySelector('.back-btn');
+        const ticker = document.getElementById('ticker-wrap');
+        
+        if(currentLayer > 1) {
+            btn.style.display = 'block';
+            ticker.style.display = 'none'; // 深入后隐藏
+            setTimeout(() => btn.style.opacity = 1, 100);
+        } else {
+            btn.style.opacity = 0;
+            ticker.style.display = 'flex'; // 首页显示
+            setTimeout(() => btn.style.display = 'none', 300);
+        }
+
+        if(currentLayer === 4) {
+            startLogStream();
+        }
+    }
+
+    setInterval(() => {
+        const now = new Date();
+        document.getElementById('clock').innerText = now.toLocaleTimeString();
+        document.getElementById('tps-counter').innerText = 800 + Math.floor(Math.random()*150);
+    }, 1000);
+
+    // --- V3 的日志逻辑 (恢复) ---
+    let logInterval;
+    function startLogStream() {
+        const logWindow = document.getElementById('log-window');
+        logWindow.innerHTML = ''; 
+        const initLogs = [
+            '任务初始化完成，等待资源分配...',
+            '资源分配完毕，加载知识库上下文...',
+            '正在执行核心逻辑推理...',
+            '调用 LLM API 接口，Tokens: 1024...'
+        ];
+        initLogs.forEach((text) => {
+            const div = document.createElement('div');
+            div.className = 'log-line';
+            div.innerHTML = `[HISTORY] <span style="color:#888">${text}</span>`;
+            logWindow.appendChild(div);
+        });
+
+        clearInterval(logInterval); 
+        logInterval = setInterval(() => {
+            if(currentLayer !== 4) return;
+            const ms = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = 'log-line log-new';
+            div.innerHTML = `[${ms}] <span style="color:var(--primary)">DATA</span> Stream processing chunk [ID:${Math.floor(Math.random()*9999)}]...`;
+            logWindow.appendChild(div);
+            logWindow.scrollTop = logWindow.scrollHeight;
+        }, 800);
+    }
+</script>
+</body>
+</html>
